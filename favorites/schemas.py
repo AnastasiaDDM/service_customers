@@ -1,0 +1,36 @@
+'''Модуль для описания схем представления данных клиентов.'''
+import datetime
+from typing import List, Optional
+
+from ninja import Field, FilterSchema, Schema
+
+
+class FavoriteOut(Schema):
+    '''Схема OUT для избранных.'''
+
+    id: int
+    user_id: int
+    item_id: int
+    created_at: Optional[datetime.datetime] = None
+
+
+class FavoriteIn(Schema):
+    '''Схема IN для избранных.'''
+
+    user_id: int
+    item_id: int
+
+
+class FavoriteFilter(FilterSchema):
+    '''Схема FILTER для избранных.'''
+
+    id: Optional[int] = None
+    user_id__in: List[int] = Field(None, alias='user_id')
+    item_id__in: List[int] = Field(None, alias='item_id')
+    created_at: Optional[datetime.datetime] = None
+
+
+class FavoriteDelete(FilterSchema):
+    '''Схема DELETE для избранных.'''
+
+    id__in: List[int] = Field(None, alias='id')

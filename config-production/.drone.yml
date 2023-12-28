@@ -1,0 +1,93 @@
+kind: pipeline
+name: deploy
+
+steps:
+  - name: build
+    image: plugins/docker
+    settings:
+      registry: upload.dockerhub01.aptekar.local
+      username:
+        from_secret: build_username
+      password:
+        from_secret: build_password
+      target: base
+      build_args:
+        - VERSION=${DRONE_TAG}
+        - BUILD_NUMBER=${DRONE_BUILD_NUMBER}
+      repo: upload.dockerhub01.aptekar.local/${DRONE_REPO_NAME,,}
+      tags:
+        - latest
+        - "${DRONE_TAG}"
+      insecure: true
+      custom_dns: 192.168.123.254
+
+  - name: upload-config
+    depends_on:
+      - build
+    image: appleboy/drone-scp
+    settings:
+      host: docker06.prod.aptk.local
+      username:
+        from_secret: deploy_username
+      password:
+        from_secret: deploy_password
+      target: ${DRONE_REPO_NAME}/${DRONE_BUILD_NUMBER}-${DRONE_TAG}
+      source: config-production
+      strip_components: 1
+
+  - name: deploy
+    depends_on:
+      - upload-config
+    image: appleboy/drone-ssh
+    environment:
+      ENV:
+        from_secret: env
+    settings:
+      host: docker06.prod.aptk.local
+      username:
+        from_secret: deploy_username
+      password:
+        from_secret: deploy_password
+      envs:
+        - ENV
+      script_stop: true
+      script: |
+        cd '${DRONE_REPO_NAME}'/${DRONE_BUILD_NUMBER}-'${DRONE_TAG}'
+
+        echo >> .env
+        echo "$ENV" >> .env
+        echo COMPOSE_PROJECT_NAME='${DRONE_REPO_NAME,,}' >> .env
+        echo DRONE_TAG='${DRONE_TAG}' >> .env
+
+        docker compose pull
+        docker compose down --remove-orphans
+
+        ln -sfT ${DRONE_BUILD_NUMBER}-'${DRONE_TAG}' ../current
+
+        docker compose up -d        
+
+  - name: verify-compose
+    depends_on:
+      - deploy
+    image: appleboy/drone-ssh
+    settings:
+      host: docker06.prod.aptk.local
+      username:
+        from_secret: deploy_username
+      password:
+        from_secret: deploy_password
+      script_stop: true
+      script: |
+        cd '${DRONE_REPO_NAME}'/${DRONE_BUILD_NUMBER}-'${DRONE_TAG}'
+
+        for i in $(seq 1 60); do
+            [ "$(docker compose ps --services -a --status paused --status restarting --status removing --status dead --status exited)" == '' ]
+
+            sleep 1
+        done
+
+        [ "$(docker compose ps --services -a --status paused --status restarting --status removing --status dead --status exited --status created)" == '' ]        
+
+trigger:
+  event:
+    - tag

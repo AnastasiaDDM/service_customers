@@ -1,0 +1,54 @@
+services:
+  vaptekecustomers-postgresql:
+    image: postgres:16-alpine
+    container_name: vAptekeCustomers-postgresql
+    restart: always
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -d ${POSTGRES_DB} -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+    volumes:
+      - /data/bind/vaptekecustomers/postgres:/var/lib/postgresql/data:rw
+    env_file:
+      - ./.env
+
+
+  vaptekecustomers-server:
+    image: dockerhub01.aptekar.local/vaptekecustomers:${DRONE_TAG}
+    restart: always
+    container_name: vAptekeCustomers-server
+    depends_on:
+      vaptekecustomers-postgresql:
+        condition: service_healthy
+    ports:
+      - 8030:8000
+    logging:
+      driver: fluentd
+      options:
+        tag: docker.{{.ImageName}}
+        mode: non-blocking
+        max-buffer-size: 100m
+        fluentd-retry-wait: 5s
+        fluentd-max-retries: '120'
+        fluentd-async: 'true'
+        fluentd-address: docker06.prod.aptk.local:24224
+    labels:
+      - apt_purpose=service
+      - apt_company=vapteke
+    env_file:
+      - ./.env
+    environment:
+      TZ: Asia/Irkutsk
+
+      POSTGRES_HOST: vaptekecustomers-postgresql
+      POSTGRES_PORT: 5432
+
+      VAPTEKESYNC_HOST: 192.168.123.205
+      VAPTEKESYNC_PORT: 1433
+
+      MSSQL_TIMEOUT: 30
+      MSSQL_RETRIES_COUNT: 3
+      MSSQL_RETRIES_SLEEP: 30
+
+      API_WORKERS: 2

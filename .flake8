@@ -1,0 +1,13 @@
+[flake8]
+max-line-length = 99
+ignore = E128, D105, D106, D300, Q002
+import-order-style = google
+inline-quotes = '
+exclude =
+    migrations
+    __pycache__
+    .env*
+    venv
+    manage.py
+    settings.py
+    docker-compose.yml
