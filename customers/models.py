@@ -1,5 +1,4 @@
 '''Модуль для описания сущности Клиента и вспомогательных.'''
-from django.contrib.postgres.indexes import HashIndex
 from django.db import models
 
 
@@ -19,7 +18,7 @@ class Firstnames(models.Model):
 class Lastnames(models.Model):
     '''Модель для фамилии.'''
 
-    name = models.CharField(max_length=50)
+    name = models.CharField(max_length=50, unique=True)
 
     class Meta:
         db_table = 'lastnames'
@@ -29,34 +28,27 @@ class Lastnames(models.Model):
         return f'{self.id}_{self.name}'
 
 
-class Phones(models.Model):
-    '''Модель для номеров телефонов.'''
+class Platforms(models.Model):
+    '''Модель для платформы (десктоп, мобильная версия).'''
 
-    code = models.CharField(max_length=4)
-    number = models.CharField(max_length=10)
+    name = models.CharField(max_length=50, unique=True)
 
     class Meta:
-        db_table = 'phones'
+        db_table = 'platforms'
         ordering = ['id']
-        # HashIndex не используется при составных ключах
-        indexes = (
-            HashIndex(
-                fields=('number',),
-                name='number_idx',
-            ),
-            models.Index(fields=['number', 'code'], name='number_code_idx'),
-        )
 
     def __str__(self) -> str:
-        return f'{self.id}_{self.code}-{self.number}'
+        return f'{self.id}_{self.name}'
 
 
 class Customers(models.Model):
     '''Модель для клиента.'''
 
     id = models.IntegerField('id', primary_key=True)
-    email = models.EmailField(max_length=254, null=True, blank=True)
-    phone = models.OneToOneField(Phones, on_delete=models.PROTECT, unique=True)
+    email = models.EmailField(max_length=254, null=True, blank=True, unique=True)
+    phone = models.CharField(max_length=11, null=True, blank=True, unique=True)
+    favorites = models.JSONField(null=True, blank=True)
+    basket = models.JSONField(null=True, blank=True)
     firstname = models.ForeignKey(
         Firstnames,
         max_length=50,
@@ -73,11 +65,20 @@ class Customers(models.Model):
     )
     birthday = models.DateField(null=True, blank=True)
     # choices расходует больше памяти по сравнению с Bool
-    GENDER_CHOICES = (('M', 'Male'), ('F', 'Female'))
+    GENDER_CHOICES = (('m', 'Male'), ('f', 'Female'))
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, null=True, blank=True)
     city_id = models.IntegerField(null=True, blank=True)
-    last_auth_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(null=True, blank=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    last_auth_at = models.DateTimeField(null=True, blank=True)
+    last_auth_platform = models.ForeignKey(
+        Platforms,
+        max_length=50,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
 
     class Meta:
         db_table = 'customers'

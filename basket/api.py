@@ -1,4 +1,4 @@
-'''Модуль для методов API по работе с сущностью Избранных товаров.'''
+'''Модуль для методов API по работе с сущностью Корзины товаров.'''
 from typing import Dict, List
 
 from customers.models import Customers
@@ -10,15 +10,15 @@ from ninja import Query, Router
 from ninja.pagination import LimitOffsetPagination, paginate
 #
 # from .models import Favorites
-# from .schemas import FavoriteDelete, FavoriteFilter, FavoriteIn, FavoriteOut
+from .schemas import BasketFilter
 #
 
 router = Router()
 #
 #
-# @router.get('', summary='Список избранных товаров', response=List[FavoriteOut])
-# @paginate(LimitOffsetPagination)
-# def list_favorites(request: HttpRequest, filters: FavoriteFilter = Query(...)) -> List[Favorites]:
+@router.get('', summary='Список избранных товаров', response=List[str])
+@paginate(LimitOffsetPagination)
+def list_favorites(request: HttpRequest, filters: BasketFilter = Query(...)) -> List[str]:
 #     '''
 #     Метод получения списка избранных товаров.
 #
@@ -59,7 +59,7 @@ router = Router()
 #         }
 #     '''
 #     favorites = filters.filter(Favorites.objects.all())
-#     return favorites
+    return ['', 'j']
 #
 #
 # @router.post('', summary='Добавление избранного товара', response=FavoriteOut)

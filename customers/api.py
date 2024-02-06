@@ -4,21 +4,25 @@ from typing import Any, Dict, List, Union
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from ninja import Router
+from ninja import Query, Router
 from ninja.pagination import LimitOffsetPagination, paginate
 
-from .models import Customers, Firstnames, Lastnames, Phones
-from .schemas import CustomerIn, CustomerOut, CustomerResponseOut, CustomerUpdate, PhoneStrIn
+from .models import Customers, Firstnames, Lastnames, Platforms
+from .schemas import (
+    CustomerFilter, CustomerIn, CustomerOut, CustomerOutExtended, CustomerResponseOut,
+    CustomerUpdate, PhoneStrIn
+)
+from vaptekecustomers.common import get_customer_deleted_none, get_or_create_platform
 
 router = Router()
 
 
-def _filling_names(data_dict: Dict[str, Any]) -> None:
+def _filling_foreign_keys(data_dict: Dict[str, Any]) -> None:
     '''
-    Внутренний метод заполнения ФИО клиента (firstname, lastname).
+    Внутренний метод заполнения внешних ключей (firstname, lastname, last_auth_platform).
 
     Аргументы:
-        data_dict (Dict): данные о клиенте из запроса.
+        data_dict (Dict): данные о пользователе из запроса.
 
     Возвращаемый результат:
         None
@@ -33,12 +37,37 @@ def _filling_names(data_dict: Dict[str, Any]) -> None:
         lastname, _ = Lastnames.objects.get_or_create(name=data_dict['lastname'])
         data_dict['lastname'] = lastname
 
+    # Платформа
+    if data_dict.get('last_auth_platform'):
+        # platform, _ = Platforms.objects.get_or_create(name=data_dict['last_auth_platform'])
+        data_dict['last_auth_platform'] = get_or_create_platform(data_dict['last_auth_platform'])
 
-@router.get('', summary='Список клиентов', response=List[CustomerOut])
-@paginate(LimitOffsetPagination)
-def list_customers(request: HttpRequest) -> List[Customers]:
+
+def _verification_phone(data_dict: Dict[str, Any]) -> bool:
     '''
-    Метод получения списка клиентов.
+    Внутренний метод верификации номера телефона.
+
+    Аргументы:
+        data_dict (Dict): данные о пользователе из запроса.
+
+    Возвращаемый результат:
+        bool
+    '''
+    # Телефон в базе уже существует
+    if Customers.objects.filter(phone=data_dict['phone']).exists():
+        # Такой телефон уже зарегистрирован, невозможно добавить клиента
+        return False
+
+    # TODO валидация нового телефона
+    # Валидация нового телефона
+    return True
+
+
+@router.get('', summary='Список пользователей', response=List[CustomerOutExtended])
+@paginate(LimitOffsetPagination)
+def list_customers(request: HttpRequest, filters: CustomerFilter = Query(...)) -> List[Customers]:
+    '''
+    Метод получения списка пользователей.
 
     Аргументы:
         request (HttpRequest): информация о запросе.
@@ -48,24 +77,32 @@ def list_customers(request: HttpRequest) -> List[Customers]:
         offset (int): смещение (страница).
 
     Возвращаемый результат:
-        (list[dict]): список json данных о клиентах.
+        (list[dict]): список json данных о пользователях.
 
     Примеры:
         >>>> list_customers(HttpRequest())
-        [{"id": 14722, "phone": {"id": 1, "code": "7", "number": "9025163138"},
-        "firstname": "Виктор", "lastname": null, "email": "ving@mail.ru", "birthday": null}, ...]
+        {
+          "items": [
+            {
+              "id": 1,
+              "phone": "79025163111",
+              "firstname": "Иван",
+              ...
+            }, ...
+          ],
+          "count": 2
+        }
     '''
-    customers = Customers.objects.filter(deleted_at=None).select_related(
-        'phone',
-        'firstname',
-        'lastname'
+    customers = filters.filter(
+        Customers.objects.all().select_related('firstname', 'lastname', 'last_auth_platform')
     )
+
     return customers
 
 
 @router.post(
     '',
-    summary='Создание клиента',
+    summary='Создание пользователя',
     response={200: CustomerOut, 400: CustomerResponseOut}
 )
 def create_customer(
@@ -73,16 +110,16 @@ def create_customer(
         data: CustomerIn
 ) -> Union[tuple[int, Dict[str, Any]], tuple[int, Customers]]:
     '''
-    Метод создания клиента.
+    Метод создания пользователя.
 
     Аргументы:
         request (HttpRequest): информация о запросе.
 
     Тело запроса:
-        data (CustomerIn): данные о клиенте из запроса.
+        data (CustomerIn): данные о пользователе из запроса.
 
     Возвращаемый результат:
-        (CustomerOut): json данных о клиенте.
+        (CustomerOut): json данных о пользователе.
 
     Примеры:
         >>>> create_customer(HttpRequest(), data)
@@ -92,93 +129,90 @@ def create_customer(
           "lastname": "Иванов",
           "email": "ivanov@mail.ru",
           "birthday": "2000-12-20",
-          "gender": "M"
+          "gender": "m",
+          "city_id": 0,
+          "last_auth_at": "2024-01-25T08:01:19.873Z",
+          "last_auth_platform": "site"
         }
         response: {
           "id": 446200,
-          "phone": {
-            "id": 78364,
-            "code": "7",
-            "number": "9041482222"
-          },
+          "phone": "79041482222",
           "firstname": "Иван",
           "lastname": "Иванов",
           "email": "ivanov@mail.ru",
-          "birthday": "2000-12-20"
+          "birthday": "2000-12-20",
+          "city_id": 0,
+          "last_auth_at": "2024-01-25T08:01:19.873Z",
+          "last_auth_platform": "site"
         }
     '''
     data_dict = data.dict()
 
-    # Добавляем или получаем из базы номер
-    phone, phone_created = Phones.objects.get_or_create(
-        number=data_dict['phone'][-10:],
-        code=data_dict['phone'][:-10]
-    )
-    # Телефон в базе уже существует
-    if not phone_created:
-        # Такой телефон уже зарегистрирован, невозможно добавить клиента
-        # TODO переписать return на осмысленный
-        return 400, {'success': False, 'message': 'Телефон в базе уже существует'}
+    # Верификация номера телефона
+    if _verification_phone(data_dict):
 
-    # Сначала обработаем поля внешних ключей (firstname, lastname)
-    _filling_names(data_dict)
+        # Сначала обработаем поля внешних ключей (firstname, lastname, last_auth_platform)
+        _filling_foreign_keys(data_dict)
 
-    # Получаем максимальный id из базы
-    max_id = Customers.objects.values('id').order_by('-id').first()
-    if not max_id:
-        max_id = {'id': 0}
-    # Устанавливаем значения атрибутам
-    data_dict['id'] = max_id.get('id', 0) + 1
-    data_dict['phone'] = phone
+        # Получаем максимальный id из базы
+        max_id = Customers.objects.values('id').order_by('-id').first()
+        if not max_id:
+            max_id = {'id': 0}
 
-    # Создание instance Customers
-    customer = Customers()
-    for attr, value in data_dict.items():
-        if value:
-            setattr(customer, attr, value)
+        # Создание instance Customers
+        customer = Customers()
+        for attr, value in data_dict.items():
+            if value:
+                setattr(customer, attr, value)
 
-    customer.save()
+        # Устанавливаем значения атрибутам
+        customer.id = max_id.get('id', 0) + 1
+        customer.created_at = timezone.now()
 
-    return 200, customer
+        customer.save()
+
+        return 200, customer
+    return 400, {'success': False, 'message': 'Пользователь с таким телефоном уже зарегистрирован'}
 
 
-@router.get('{customer_id}/', summary='Просмотр клиента', response=CustomerOut)
+@router.get('{customer_id}/', summary='Просмотр пользователя', response=CustomerOut)
 def get_customer(request: HttpRequest, customer_id: int) -> Customers:
     '''
-    Метод получения данных о неудаленном клиенте.
+    Метод получения данных о пользователе.
 
     Аргументы:
         request (HttpRequest): информация о запросе.
-        customer_id (int): id клиента.
+        customer_id (int): id пользователя.
 
     Возвращаемый результат:
-        (dict): json данных о клиенте.
+        (dict): json данных о пользователе.
 
     Примеры:
         >>>> get_customer(HttpRequest(), 14722)
-        {"id": 14722, "phone": {"id": 1, "code": "7", "number": "9025163138"},
-        "firstname": "Виктор", "lastname": null, "email": "ving@mail.ru", "birthday": null}
+        {"id": 14722, "phone": "79016606060", "firstname": "Виктор", "lastname": null, ...}
     '''
     customer = get_object_or_404(
-        Customers.objects.select_related('phone', 'firstname', 'lastname'),
+        Customers.objects.select_related('firstname', 'lastname'),
         id=customer_id,
         deleted_at=None
     )
+
     return customer
 
 
 @router.delete(
     '{customer_id}/',
-    summary='Мягкое удаление клиента',
+    summary='Удаление пользователя',
     response=CustomerResponseOut
 )
 def delete_customer(request: HttpRequest, customer_id: int) -> Dict[str, str | bool | None]:
     '''
-    Метод мягкого удаления клиента.
+    Метод удаления чувствительных данных пользователя.
+    Очищаются поля email, phone, firstname_id, lastname_id.
 
     Аргументы:
         request (HttpRequest): информация о запросе.
-        customer_id (int): id клиента.
+        customer_id (int): id пользователя.
 
     Возвращаемый результат:
         (CustomerResponseOut): json ответа выполнения операции.
@@ -187,56 +221,60 @@ def delete_customer(request: HttpRequest, customer_id: int) -> Dict[str, str | b
         >>>> delete_customer(HttpRequest(), 14722)
         {'success': True, 'message': None}
     '''
-    customer = get_object_or_404(Customers, id=customer_id)
-    if not customer.deleted_at:
-        customer.deleted_at = timezone.now()
-        customer.save(update_fields=['deleted_at'])
-    return {'success': True, 'message': None}
+    number = Customers.objects.filter(id=customer_id, deleted_at=None).update(
+        deleted_at=timezone.now(),
+        phone=None,
+        firstname=None,
+        lastname=None,
+        email=None
+    )
+
+    if number:
+        # Запись была изменена
+        return {'success': True, 'message': None}
+    return {'success': False, 'message': None}
 
 
-@router.patch('{customer_id}/', summary='Изменение клиента', response=CustomerOut)
+@router.patch('{customer_id}/', summary='Изменение пользователя', response=CustomerOut)
 def update_customer(request: HttpRequest, customer_id: int, data: CustomerUpdate) -> Customers:
     '''
-    Метод изменения клиента.
+    Метод изменения пользователя.
 
     Аргументы:
         request (HttpRequest): информация о запросе.
-        customer_id (int): id клиента.
+        customer_id (int): id пользователя.
 
     Тело запроса:
-        data (CustomerUpdate): данные о клиенте из запроса.
+        data (CustomerUpdate): данные о пользователе из запроса.
 
     Возвращаемый результат:
-        (CustomerOut): json данных о клиенте.
+        (CustomerOut): json данных о пользователе.
 
     Примеры:
         >>>> update_customer(HttpRequest(), 446200, data)
         data: {
-          "lastname": "Иванов1"
+          "lastname": "Иванов новый"
         }
         response: {
           "id": 446200,
-          "phone": {
-            "id": 78364,
-            "code": "7",
-            "number": "9041482222"
-          },
+          "phone": "79041482222",
           "firstname": "Иван",
-          "lastname": "Иванов1",
+          "lastname": "Иванов новый",
           "email": "ivanov@mail.ru",
           "birthday": "2000-12-20"
         }
     '''
-    customer = get_object_or_404(Customers, id=customer_id, deleted_at=None)
+    customer = get_customer_deleted_none(customer_id)
     data_dict = data.dict()
 
-    # Сначала обработаем поля внешних ключей (firstname, lastname)
-    _filling_names(data_dict)
+    # Сначала обработаем поля внешних ключей (firstname, lastname, last_auth_platform)
+    _filling_foreign_keys(data_dict)
 
     for attr, value in data_dict.items():
         if value:
             setattr(customer, attr, value)
 
+    customer.updated_at = timezone.now()
     customer.save()
 
     return customer
@@ -244,7 +282,7 @@ def update_customer(request: HttpRequest, customer_id: int, data: CustomerUpdate
 
 @router.patch(
     '{customer_id}/phone',
-    summary='Изменение телефона клиента',
+    summary='Изменение телефона пользователя',
     response=CustomerResponseOut
 )
 def update_phone(
@@ -253,14 +291,14 @@ def update_phone(
         data: PhoneStrIn
 ) -> Dict[str, bool | str]:
     '''
-    Метод изменения телефона клиента.
+    Метод изменения телефона пользователя.
 
     Аргументы:
         request (HttpRequest): информация о запросе.
-        customer_id (int): id клиента.
+        customer_id (int): id пользователя.
 
     Тело запроса:
-        data (PhoneStrIn): данные о клиенте из запроса (телефон).
+        data (PhoneStrIn): данные о пользователе из запроса (телефон).
 
     Возвращаемый результат:
         (CustomerResponseOut): json ответа выполнения операции.
@@ -271,36 +309,18 @@ def update_phone(
     '''
     data_dict = data.dict()
     # Поиск клиента
-    customer = get_object_or_404(
-        Customers.objects.select_related('phone'),
-        id=customer_id,
-        deleted_at=None
-    )
+    customer = get_customer_deleted_none(customer_id)
 
-    # Проверить не используется ли новый номер
-    count_phones = Phones.objects.filter(
-        number=data_dict['phone'][-10:],
-        code=data_dict['phone'][:-10]
-    ).count()
-    # Телефон еще не используется
-    if count_phones == 0:
-        # TODO валидация нового телефона
-        # Валидация нового телефона
-        # ...
+    # Телефон прошел проверку
+    if _verification_phone(data_dict):
 
-        phone_new = Phones.objects.create(
-            number=data_dict['phone'][-10:],
-            code=data_dict['phone'][:-10]
-        )
-    else:
-        return {'success': False, 'message': 'Номер уже занят'}
+        # Назначить новый номер клиенту
+        customer.phone = data_dict['phone']
+        customer.updated_at = timezone.now()
+        # Сохранить изменения
+        customer.save()
 
-    phone_old = customer.phone
-    # Назначить новый номер клиенту
-    customer.phone = phone_new
-    # Сохранить изменения
-    customer.save()
-    # Удалить старый номер из БД
-    phone_old.delete()
+        return {'success': True, 'message': 'Номер успешно изменен'}
 
-    return {'success': True, 'message': 'Номер успешно изменен'}
+    # TODO переписать return на осмысленный
+    return {'success': False, 'message': 'Телефон в базе уже существует'}

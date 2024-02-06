@@ -1,12 +1,12 @@
-'''Модуль для описания схем представления данных избранных товаров.'''
+'''Модуль для описания схем представления данных корзин.'''
 import datetime
 from typing import List, Optional
 
 from ninja import Field, FilterSchema, Schema
 
 
-class FavoriteOut(Schema):
-    '''Схема OUT для избранных.'''
+class BasketOut(Schema):
+    '''Схема OUT для корзины.'''
 
     id: int
     customer_id: int
@@ -14,15 +14,15 @@ class FavoriteOut(Schema):
     created_at: Optional[datetime.datetime] = None
 
 
-class FavoriteIn(Schema):
-    '''Схема IN для избранных.'''
+class BasketIn(Schema):
+    '''Схема IN для корзины.'''
 
     customer_id: int
     item_id: int
 
 
-class FavoriteFilter(FilterSchema):
-    '''Схема FILTER для избранных.'''
+class BasketFilter(FilterSchema):
+    '''Схема FILTER для корзины.'''
 
     id: Optional[int] = None
     customer_id__in: List[int] = Field(None, alias='customer_id')
@@ -30,7 +30,7 @@ class FavoriteFilter(FilterSchema):
     created_at: Optional[datetime.datetime] = None
 
 
-class FavoriteDelete(FilterSchema):
-    '''Схема DELETE для избранных.'''
+class BasketDelete(FilterSchema):
+    '''Схема DELETE для корзины.'''
 
     id__in: List[int] = Field(None, alias='id')
