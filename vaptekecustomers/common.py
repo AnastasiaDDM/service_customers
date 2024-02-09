@@ -7,6 +7,8 @@ import pyodbc
 
 from customers.models import Customers, Platforms
 
+from django.db.models import Q
+
 
 def fetch_named(cursor: pyodbc.Cursor) -> List[Dict[str, Any]]:
     '''
@@ -31,6 +33,14 @@ def fetch_named(cursor: pyodbc.Cursor) -> List[Dict[str, Any]]:
         result.append(dict(zip(columns, row)))
 
     return result
+
+
+def prepare_dict(original_dict: Dict, target_fields: List[str]) -> Dict[str, Any]:
+    target_dict = {}
+    for field in target_fields:
+        if original_dict.get(field):
+            target_dict[field] = original_dict[field]
+    return target_dict
 
 
 def get_customer_deleted_none(customer_id: Optional[int], **kwargs) -> Union[Customers, None, Exception]:
@@ -71,3 +81,11 @@ def get_or_create_platform(platform_name: Optional[str], **kwargs) -> Union[Plat
         return None
     platform, _ = Platforms.objects.get_or_create(name=platform_name)
     return platform
+
+
+def check_exists_obj_by_attribute(**kwargs):
+
+    if kwargs:
+        if Customers.objects.filter(**kwargs, _connector=Q.OR).exists():
+            return True
+    return False

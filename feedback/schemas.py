@@ -17,9 +17,9 @@ class FeedbackOut(Schema):
     #     model_fields = '__all__'
 
     id: int
+    url: HttpUrl = Field(None, description='https://vapteke.ru/')
     rating: int
     comment: str
-    url: HttpUrl = Field(None, description='https://vapteke.ru/')
     customer_id: Optional[int] = None
     platform: str | None = Field(None, alias='platform.name')
     created_at: Optional[date] = None

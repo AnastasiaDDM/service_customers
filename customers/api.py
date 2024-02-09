@@ -10,9 +10,9 @@ from ninja.pagination import LimitOffsetPagination, paginate
 from .models import Customers, Firstnames, Lastnames, Platforms
 from .schemas import (
     CustomerFilter, CustomerIn, CustomerOut, CustomerOutExtended, CustomerResponseOut,
-    CustomerUpdate, PhoneStrIn
+    CustomerUpdate, PhoneStrIn, CustomerResponseOut2xx
 )
-from vaptekecustomers.common import get_customer_deleted_none, get_or_create_platform
+from vaptekecustomers.common import get_customer_deleted_none, get_or_create_platform, prepare_dict, check_exists_obj_by_attribute
 
 router = Router()
 
@@ -39,7 +39,6 @@ def _filling_foreign_keys(data_dict: Dict[str, Any]) -> None:
 
     # Платформа
     if data_dict.get('last_auth_platform'):
-        # platform, _ = Platforms.objects.get_or_create(name=data_dict['last_auth_platform'])
         data_dict['last_auth_platform'] = get_or_create_platform(data_dict['last_auth_platform'])
 
 
@@ -53,17 +52,19 @@ def _verification_phone(data_dict: Dict[str, Any]) -> bool:
     Возвращаемый результат:
         bool
     '''
-    # Телефон в базе уже существует
-    if Customers.objects.filter(phone=data_dict['phone']).exists():
-        # Такой телефон уже зарегистрирован, невозможно добавить клиента
-        return False
+    # # Телефон в базе уже существует
+    # if Customers.objects.filter(phone=data_dict['phone']).exists():
+    #     # Такой телефон уже зарегистрирован, невозможно добавить клиента
+    #     return False
 
-    # TODO валидация нового телефона
-    # Валидация нового телефона
+    if data_dict.get('phone'):
+        # TODO валидация нового телефона
+        # Валидация нового телефона
+        pass
     return True
 
 
-@router.get('', summary='Список пользователей', response=List[CustomerOutExtended])
+@router.get('', summary='Список пользователей', response=List[CustomerOut])
 @paginate(LimitOffsetPagination)
 def list_customers(request: HttpRequest, filters: CustomerFilter = Query(...)) -> List[Customers]:
     '''
@@ -94,7 +95,7 @@ def list_customers(request: HttpRequest, filters: CustomerFilter = Query(...)) -
         }
     '''
     customers = filters.filter(
-        Customers.objects.all().select_related('firstname', 'lastname', 'last_auth_platform')
+        Customers.objects.all().select_related('firstname', 'lastname')
     )
 
     return customers
@@ -103,7 +104,7 @@ def list_customers(request: HttpRequest, filters: CustomerFilter = Query(...)) -
 @router.post(
     '',
     summary='Создание пользователя',
-    response={200: CustomerOut, 400: CustomerResponseOut}
+    response={201: CustomerResponseOut2xx, 400: CustomerResponseOut}
 )
 def create_customer(
         request: HttpRequest,
@@ -148,6 +149,13 @@ def create_customer(
     '''
     data_dict = data.dict()
 
+    # Проверка уникальных полей
+    filter_dict = prepare_dict(data_dict, ['phone', 'email'])
+
+    if check_exists_obj_by_attribute(**filter_dict):
+        # Поля не уникальны, такой объект уже есть в бд
+        return 400, {'success': False, 'message': 'Пользователь с таким телефоном или эл. почтой уже зарегистрирован'}
+
     # Верификация номера телефона
     if _verification_phone(data_dict):
 
@@ -171,11 +179,14 @@ def create_customer(
 
         customer.save()
 
-        return 200, customer
+        answer = {'data': [{'id': customer.id}]}
+
+        return 201, answer
+
     return 400, {'success': False, 'message': 'Пользователь с таким телефоном уже зарегистрирован'}
 
 
-@router.get('{customer_id}/', summary='Просмотр пользователя', response=CustomerOut)
+@router.get('{customer_id}/', summary='Просмотр пользователя', response=CustomerOutExtended)
 def get_customer(request: HttpRequest, customer_id: int) -> Customers:
     '''
     Метод получения данных о пользователе.
@@ -192,7 +203,7 @@ def get_customer(request: HttpRequest, customer_id: int) -> Customers:
         {"id": 14722, "phone": "79016606060", "firstname": "Виктор", "lastname": null, ...}
     '''
     customer = get_object_or_404(
-        Customers.objects.select_related('firstname', 'lastname'),
+        Customers.objects.select_related('firstname', 'lastname', 'last_auth_platform'),
         id=customer_id,
         deleted_at=None
     )
@@ -203,9 +214,9 @@ def get_customer(request: HttpRequest, customer_id: int) -> Customers:
 @router.delete(
     '{customer_id}/',
     summary='Удаление пользователя',
-    response=CustomerResponseOut
+    response={200: None, 400: None}
 )
-def delete_customer(request: HttpRequest, customer_id: int) -> Dict[str, str | bool | None]:
+def delete_customer(request: HttpRequest, customer_id: int) -> tuple[int, None]:
     '''
     Метод удаления чувствительных данных пользователя.
     Очищаются поля email, phone, firstname_id, lastname_id.
@@ -231,12 +242,12 @@ def delete_customer(request: HttpRequest, customer_id: int) -> Dict[str, str | b
 
     if number:
         # Запись была изменена
-        return {'success': True, 'message': None}
-    return {'success': False, 'message': None}
+        return 200, None
+    return 400, None
 
 
-@router.patch('{customer_id}/', summary='Изменение пользователя', response=CustomerOut)
-def update_customer(request: HttpRequest, customer_id: int, data: CustomerUpdate) -> Customers:
+@router.patch('{customer_id}/', summary='Изменение пользователя', response={202: None, 400: None})
+def update_customer(request: HttpRequest, customer_id: int, data: CustomerUpdate) -> tuple[int, None]:
     '''
     Метод изменения пользователя.
 
@@ -267,60 +278,30 @@ def update_customer(request: HttpRequest, customer_id: int, data: CustomerUpdate
     customer = get_customer_deleted_none(customer_id)
     data_dict = data.dict()
 
-    # Сначала обработаем поля внешних ключей (firstname, lastname, last_auth_platform)
-    _filling_foreign_keys(data_dict)
+    # Проверка уникальных полей
+    filter_dict = prepare_dict(data_dict, ['phone', 'email'])
 
-    for attr, value in data_dict.items():
-        if value:
-            setattr(customer, attr, value)
+    if check_exists_obj_by_attribute(**filter_dict):
+        # Поля не уникальны, такой объект уже есть в бд
+        return 400, None
 
-    customer.updated_at = timezone.now()
-    customer.save()
-
-    return customer
-
-
-@router.patch(
-    '{customer_id}/phone',
-    summary='Изменение телефона пользователя',
-    response=CustomerResponseOut
-)
-def update_phone(
-        request: HttpRequest,
-        customer_id: int,
-        data: PhoneStrIn
-) -> Dict[str, bool | str]:
-    '''
-    Метод изменения телефона пользователя.
-
-    Аргументы:
-        request (HttpRequest): информация о запросе.
-        customer_id (int): id пользователя.
-
-    Тело запроса:
-        data (PhoneStrIn): данные о пользователе из запроса (телефон).
-
-    Возвращаемый результат:
-        (CustomerResponseOut): json ответа выполнения операции.
-
-    Примеры:
-        >>>> update_phone(HttpRequest(), 446200, {'phone': '79041482220'})
-        {'success': True, 'message': 'Номер успешно изменен'}
-    '''
-    data_dict = data.dict()
-    # Поиск клиента
-    customer = get_customer_deleted_none(customer_id)
-
-    # Телефон прошел проверку
+    # Верификация номера телефона
     if _verification_phone(data_dict):
 
-        # Назначить новый номер клиенту
-        customer.phone = data_dict['phone']
+        # Сначала обработаем поля внешних ключей (firstname, lastname, last_auth_platform)
+        _filling_foreign_keys(data_dict)
+
+        # Список обновляемых полей
+        u_f = []
+        for attr, value in data_dict.items():
+            if value:
+                setattr(customer, attr, value)
+                u_f.append(attr)
+
+        u_f.append('updated_at')
         customer.updated_at = timezone.now()
-        # Сохранить изменения
-        customer.save()
+        customer.save(update_fields=u_f)
 
-        return {'success': True, 'message': 'Номер успешно изменен'}
+        return 202, None
 
-    # TODO переписать return на осмысленный
-    return {'success': False, 'message': 'Телефон в базе уже существует'}
+    return 400, None

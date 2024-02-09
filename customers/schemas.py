@@ -41,27 +41,29 @@ class CustomerOut(Schema):
     '''Схема OUT для пользователя.'''
 
     id: int
+    email: str | None = Field(None, max_length=254)  # Для пропуска email с точкой и др.
     phone: str | None
     firstname: str | None = Field(None, max_length=name_max_length, alias='firstname.name')
     lastname: str | None = Field(None, max_length=name_max_length, alias='lastname.name')
-    email: str | None = Field(None, max_length=254)  # Для пропуска email с точкой и др.
-    birthday: date | None
-    gender: Optional[gender_mask] | None
-    city_id: int | None
+    created_at: datetime | None
+    deleted_at: datetime | None
+    last_auth_at: datetime | None
 
 
 class CustomerOutExtended(CustomerOut):
     '''Схема OUT расширенная для пользователя. Наследует поля из CustomerOut.'''
 
-    created_at: datetime | None
+    birthday: date | None
+    gender: Optional[gender_mask] | None
+    city_id: int | None
     updated_at: datetime | None
-    deleted_at: datetime | None
-    last_auth_at: datetime | None
     last_auth_platform: platform_mask | None = Field(None, alias='last_auth_platform.name')
+    favorites: Dict | None
+    basket: Dict | None
 
 
-class CustomerUpdate(Schema):
-    '''Схема IN Update для пользователя.'''
+class _CustomerIn(Schema):
+    '''Схема IN для пользователя. Наследует поля и валидаторы из PhoneStrIn.'''
 
     firstname: str = Field(None, max_length=name_max_length)
     lastname: str = Field(None, max_length=name_max_length)
@@ -69,17 +71,26 @@ class CustomerUpdate(Schema):
     birthday: Optional[date] = None
     gender: Optional[gender_mask] = None
     city_id: Optional[int] = None
-    last_auth_at: Optional[datetime] = None
-    last_auth_platform: Optional[platform_mask] = None
 
     _normalize_firstname = validator('firstname', allow_reuse=True)(_check_name)
     _normalize_lastname = validator('lastname', allow_reuse=True)(_check_name)
 
 
-class CustomerIn(PhoneStrIn, CustomerUpdate):
-    '''Схема IN для пользователя. Наследует поля и валидаторы из PhoneStrIn и CustomerUpdate.'''
+class CustomerIn(PhoneStrIn, _CustomerIn):
+    '''Схема IN для пользователя. Наследует поля и валидаторы из PhoneStrIn и _CustomerIn.'''
 
     pass
+
+
+class CustomerUpdate(_CustomerIn):
+    '''Схема IN Update для пользователя. Наследует поля и валидаторы из CustomerIn.'''
+
+    phone: Optional[str] = None
+    last_auth_at: Optional[datetime] = None
+    last_auth_platform: Optional[platform_mask] = None
+    basket: Optional[Dict] = None
+
+    _normalize_phone = validator('phone', allow_reuse=True)(_check_phone)
 
 
 class CustomerFilter(FilterSchema):
@@ -131,3 +142,8 @@ class CustomerResponseOut(Schema):
     success: bool
     message: str | None
     data: Optional[Dict] = None
+
+
+class CustomerResponseOut2xx(Schema):
+    '''Схема OUT для 2xx ответов пользователя.'''
+    data: List

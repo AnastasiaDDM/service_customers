@@ -4,7 +4,7 @@ import re
 from customers.models import Customers, Firstnames
 from django.db import connections
 from django.http import HttpRequest, HttpResponse
-import logs
+#import logs
 from ninja import Router
 from vaptekecustomers import common
 
@@ -26,7 +26,7 @@ def import_customers(request: HttpRequest) -> HttpResponse:
         >>>> import_customers(HttpRequest())
         ('Импорт выполнен')
     '''
-    logs.info('Customers import starting.')
+    #logs.info('Customers import starting.')
 
     customers = []
     pattern_email = r'^.{1,100}@[a-z]{2,6}\.[a-z]{2,4}$'
@@ -95,16 +95,16 @@ def import_customers(request: HttpRequest) -> HttpResponse:
                 # Добавляем клиентов в бд
                 Customers.objects.bulk_create(customers, ignore_conflicts=True)
             except Exception:
-                logs.exception_caught('Error adding customers to Postgres.')
+                #logs.exception_caught('Error adding customers to Postgres.')
                 return HttpResponse(
                     'Импорт не выполнен. Ошибка добавления пользователей в Postgres.'
                 )
 
     except Exception:
-        logs.exception_caught('Error importing from MSSQL vAptekeSync.')
+        #logs.exception_caught('Error importing from MSSQL vAptekeSync.')
         return HttpResponse(
             'Импорт не выполнен. Ошибка импорта пользователей из MSSQL vAptekeSync.'
         )
 
-    logs.info('Customers import completed.')
+    #logs.info('Customers import completed.')
     return HttpResponse('Импорт выполнен.')

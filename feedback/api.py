@@ -1,8 +1,8 @@
 '''Модуль для методов API по работе с сущностью Обратной связи от пользователей сайта.'''
-from typing import Dict, List
+from typing import Any, Dict, List, Union
 
 
-from customers.schemas import CustomerResponseOut
+from customers.schemas import CustomerResponseOut2xx
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -62,8 +62,8 @@ def list_feedback(request: HttpRequest, filters: FeedbackFilter = Query(...)) ->
     return feedback
 
 
-@router.post('', summary='Добавление отзыва о работе сайта', response=FeedbackOut)
-def add_feedback(request: HttpRequest, data: FeedbackIn) -> FeedbackOut:
+@router.post('', summary='Добавление отзыва о работе сайта', response={201: CustomerResponseOut2xx, 400: None})
+def add_feedback(request: HttpRequest, data: FeedbackIn) -> Union[tuple[int, Dict[str, Any]], tuple[int, None]]:
     '''
     Метод добавления отзыва о работе сайта.
 
@@ -102,18 +102,39 @@ def add_feedback(request: HttpRequest, data: FeedbackIn) -> FeedbackOut:
             setattr(feedback, attr, value)
 
     feedback.save()
+
+    answer = {'data': [{'id': feedback.id}]}
+
+    return 201, answer
+
+
+@router.get('{feedback_id}/', summary='Просмотр отзыва', response=FeedbackOut)
+def get_customer(request: HttpRequest, feedback_id: int) -> Feedback:
+    '''
+    Метод получения данных о пользователе.
+
+    Аргументы:
+        request (HttpRequest): информация о запросе.
+        customer_id (int): id пользователя.
+
+    Возвращаемый результат:
+        (dict): json данных о пользователе.
+
+    Примеры:
+        >>>> get_customer(HttpRequest(), 14722)
+        {"id": 14722, "phone": "79016606060", "firstname": "Виктор", "lastname": null, ...}
+    '''
+    feedback = get_object_or_404(Feedback.objects.select_related('platform'), id=feedback_id)
+
     return feedback
 
 
 @router.delete(
-    '',
+    '{feedback_id}/',
     summary='Удаление отзыва о работе сайта',
-    response=CustomerResponseOut
+    response={200, 400}
 )
-def delete_feedback(
-        request: HttpRequest,
-        data: FeedbackDelete
-) -> Dict[str, str | bool | None | Dict]:
+def delete_feedback(request: HttpRequest, feedback_id: int) -> int:
     '''
     Метод удаления отзыва о работе сайта.
 
@@ -136,5 +157,43 @@ def delete_feedback(
           }
         }
     '''
+    number = Feedback.objects.filter(id=feedback_id).delete()
+    if number:
+        # Запись была удалена
+        return 200
+    return 400
+
+
+@router.delete(
+    '',
+    summary='Удаление отзыва о работе сайта',
+    response={200, 400}
+)
+def delete_bulk_feedback(
+        request: HttpRequest,
+        data: FeedbackDelete
+) -> int:
+    '''
+    Метод удаления пачки отзывов о работе сайта.
+
+    Аргументы:
+        request (HttpRequest): информация о запросе.
+
+    Тело запроса:
+        data (FavoriteDelete): данные об избранном из запроса (id избранных для удаления).
+
+    Возвращаемый результат:
+        (CustomerResponseOut): json ответа выполнения операции.
+
+    Примеры:
+        >>>> delete_feedback(HttpRequest(), {"id": [1, 2, 3]})
+        response: {
+          "success": true,
+          "message": null,
+          "data": {
+            "count_deleted": 2
+          }
+        }
+    '''
     count_deleted, _ = data.filter(Feedback.objects.all()).delete()
-    return {'success': True, 'message': None, 'data': {'count_deleted': count_deleted}}
+    return 200
