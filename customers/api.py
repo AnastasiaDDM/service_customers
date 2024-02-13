@@ -10,7 +10,8 @@ from ninja.pagination import LimitOffsetPagination, paginate
 from .models import Customers, Firstnames, Lastnames, Platforms
 from .schemas import (
     CustomerFilter, CustomerIn, CustomerOut, CustomerOutExtended, CustomerResponseOut,
-    CustomerUpdate, PhoneStrIn, CustomerResponseOut2xx
+    CustomerUpdate, PhoneStrIn, CustomerResponseOut2xx, CustomerFavoritesIn, CustomerFavoritesSchema,
+CustomerFavoritesSchemaData, CustomerFavoritesDelete
 )
 from vaptekecustomers.common import get_customer_deleted_none, get_or_create_platform, prepare_dict, check_exists_obj_by_attribute
 
@@ -305,3 +306,205 @@ def update_customer(request: HttpRequest, customer_id: int, data: CustomerUpdate
         return 202, None
 
     return 400, None
+
+
+@router.post(
+    '{customer_id}/favorites/',
+    summary='Добавление товара в избранное',
+    response={201: CustomerResponseOut2xx, 400: None}
+)
+def add_favorite(
+        request: HttpRequest,
+        customer_id: int,
+        data: CustomerFavoritesIn
+) -> Union[tuple[int, Dict[str, Any]], tuple[int, None]]:
+    '''
+    Метод получения данных о пользователе.
+
+    Аргументы:
+        request (HttpRequest): информация о запросе.
+        customer_id (int): id пользователя.
+
+    Возвращаемый результат:
+        (dict): json данных о пользователе.
+
+    Примеры:
+        >>>> get_customer(HttpRequest(), 14722)
+        {"id": 14722, "phone": "79016606060", "firstname": "Виктор", "lastname": null, ...}
+    '''
+    item_id = data.dict().get('item_id')
+
+    customer = get_customer_deleted_none(customer_id, only_fields=['favorites'])
+    favorites, count = [], 0
+
+    try:
+        # Валидация схемы, в базе уже есть избранные товары
+        schema = CustomerFavoritesSchema(**customer.favorites)
+        print('+++  ')
+        print(CustomerFavoritesSchema(**customer.favorites))
+        print(customer.favorites['data']['items'])
+        # Получаем items и count_all из customer
+        favorites = customer.favorites['data']['items']
+        print(favorites)
+        count = customer.favorites['data']['count_all']
+        print(count)
+
+    except:
+        print('aaa')
+        # favorites, count = [], 0
+        # Создаем пустую схему для избранных {'version': 1, 'data': None}
+        schema = CustomerFavoritesSchema()
+
+    if item_id in favorites:
+        # Этот товар уже есть в избранном
+        # Удаляем это item_id из списка, и добавляем его в начало списка
+        favorites.remove(item_id)
+        favorites.insert(0, item_id)
+
+    else:
+        # Такого товара нет в избранном
+        # Добавляем item_id в начало списка и увеличиваем количество на 1
+        favorites.insert(0, item_id)
+        count += 1
+
+    # Устанавливаем новые значения в data
+    schema.data = CustomerFavoritesSchemaData(count_all=count, items=favorites)
+    # Устанавливаем это значение в атрибут объекта
+    customer.favorites = schema.dict()
+    customer.updated_at = timezone.now()
+    customer.save(update_fields=['updated_at', 'favorites'])
+    return 201, {'data': [{'id': item_id}]}
+
+
+@router.delete(
+    '{customer_id}/favorites/',
+    summary='Удаление товаров из избранного',
+    response={200: None, 400: None}
+)
+def delete_favorites(
+        request: HttpRequest,
+        customer_id: int,
+        data: CustomerFavoritesDelete
+) -> tuple[int, None]:
+    '''
+    Метод удаления товара из избранного.
+
+    Аргументы:
+        request (HttpRequest): информация о запросе.
+
+    Тело запроса:
+        data (FavoriteDelete): данные об избранном из запроса (id избранных для удаления).
+
+    Возвращаемый результат:
+        (CustomerResponseOut): json ответа выполнения операции.
+
+    Примеры:
+        >>>> delete_favorite(HttpRequest(), {"id": [1, 2, 3]})
+        response: {
+          "success": true,
+          "message": null,
+          "data": {
+            "count_deleted": 2
+          }
+        }
+    '''
+
+
+    # count_deleted, _ = data.filter(Favorites.objects.all()).delete()
+    # return {'success': True, 'message': None, 'data': {'count_deleted': count_deleted}}
+
+    list_items_id = data.dict().get('item_id')
+    print(data.dict())
+    print(list_items_id)
+    customer = get_customer_deleted_none(customer_id, only_fields=['favorites'])
+    favorites, count = [], 0
+
+    try:
+        # Валидация схемы, в базе уже есть избранные товары
+        schema = CustomerFavoritesSchema(**customer.favorites)
+        print('+++  ')
+        print(CustomerFavoritesSchema(**customer.favorites))
+        print(customer.favorites['data']['items'])
+        # Получаем items и count_all из customer
+        favorites = customer.favorites['data']['items']
+        print(favorites)
+        # count = customer.favorites['data']['count_all']
+        # print(count)
+
+        for item_id in list_items_id:
+            print(item_id)
+            try:
+                favorites.remove(item_id)
+            except:
+                pass
+
+        count = len(favorites)
+
+    except:
+        print('aaa')
+        # favorites, count = [], 0
+        # Создаем пустую схему для избранных {'version': 1, 'data': None}
+        # schema = CustomerFavoritesSchema()
+        return 400, None
+
+    # if item_id in favorites:
+    #     # Этот товар уже есть в избранном
+    #     # Удаляем это item_id из списка, и добавляем его в начало списка
+    #     favorites.remove(item_id)
+    #     favorites.insert(0, item_id)
+    #
+    # else:
+    #     # Такого товара нет в избранном
+    #     # Добавляем item_id в начало списка и увеличиваем количество на 1
+    #     favorites.insert(0, item_id)
+    #     count += 1
+
+    # Устанавливаем новые значения в data
+    schema.data = CustomerFavoritesSchemaData(count_all=count, items=favorites)
+    # Устанавливаем это значение в атрибут объекта
+    customer.favorites = schema.dict()
+    customer.updated_at = timezone.now()
+    customer.save(update_fields=['updated_at', 'favorites'])
+    # print(schema)
+    return 200, None
+
+
+@router.delete(
+    '{customer_id}/favorites/all',
+    summary='Удаление всех товаров из избранного',
+    response={200: None, 400: None}
+)
+def delete_all_favorites(
+        request: HttpRequest,
+        customer_id: int
+) -> tuple[int, None]:
+    '''
+    Метод удаления товара из избранного.
+
+    Аргументы:
+        request (HttpRequest): информация о запросе.
+
+    Тело запроса:
+        data (FavoriteDelete): данные об избранном из запроса (id избранных для удаления).
+
+    Возвращаемый результат:
+        (CustomerResponseOut): json ответа выполнения операции.
+
+    Примеры:
+        >>>> delete_favorite(HttpRequest(), {"id": [1, 2, 3]})
+        response: {
+          "success": true,
+          "message": null,
+          "data": {
+            "count_deleted": 2
+          }
+        }
+    '''
+    customer = get_customer_deleted_none(customer_id, only_fields=['favorites'])
+
+    # Устанавливаем это значение в None
+    customer.favorites = None
+    customer.updated_at = timezone.now()
+    customer.save(update_fields=['updated_at', 'favorites'])
+    # print(schema)
+    return 200, None

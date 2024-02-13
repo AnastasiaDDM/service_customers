@@ -147,3 +147,26 @@ class CustomerResponseOut(Schema):
 class CustomerResponseOut2xx(Schema):
     '''Схема OUT для 2xx ответов пользователя.'''
     data: List
+
+
+class CustomerFavoritesIn(Schema):
+    '''Схема IN для добавления товара в избранное.'''
+    item_id: int
+
+
+class CustomerFavoritesDelete(Schema):
+    '''Схема DELETE для избранных.'''
+
+    item_id: List[int]
+
+
+class CustomerFavoritesSchemaData(Schema):
+    '''Схема json данных об избранных товарах.'''
+    count_all: int
+    items: List[int]
+
+
+class CustomerFavoritesSchema(Schema):
+    '''Схема json данных об избранных товарах.'''
+    version: int = Field(default=1)
+    data: CustomerFavoritesSchemaData = Field(default=None)

@@ -16,7 +16,6 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'customers',
     'service',
-    'favorites',
     'feedback',
 
 ]

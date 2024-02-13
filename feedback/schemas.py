@@ -49,4 +49,4 @@ class FeedbackFilter(FilterSchema):
 class FeedbackDelete(FilterSchema):
     '''Схема DELETE для обратной связи.'''
 
-    id__in: List[int] = Field(None, alias='id')
+    id: int = Field(None, alias='id')

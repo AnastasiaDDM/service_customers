@@ -55,14 +55,21 @@ def get_customer_deleted_none(customer_id: Optional[int], **kwargs) -> Union[Cus
     Возвращаемый результат:
         (Union[Customers, None, Exception]): Возвращает пользователя, None или ошибку.
     '''
+    models = Customers
+    # Передан список необходимых полей
+    if kwargs.get('only_fields'):
+        models = Customers.objects.only(*kwargs['only_fields'])
+
+
     # Вместо ошибки возвращать None
     if kwargs.get('return_error', True) is False:
         try:
-            return get_object_or_404(Customers, id=customer_id, deleted_at=None)
+            return get_object_or_404(models, id=customer_id, deleted_at=None)
         except Exception:
             return None
 
-    return get_object_or_404(Customers, id=customer_id, deleted_at=None)
+    # Если не найден - возвращать ошибку 404
+    return get_object_or_404(models, id=customer_id, deleted_at=None)
 
 
 def get_or_create_platform(platform_name: Optional[str], **kwargs) -> Union[Platforms, None]:

@@ -94,7 +94,7 @@ def add_feedback(request: HttpRequest, data: FeedbackIn) -> Union[tuple[int, Dic
     feedback = Feedback()
 
     # Устанавливаем автора обратной связи и платформу
-    feedback.customer = get_customer_deleted_none(data_dict.pop('customer_id', None), return_error=False)
+    feedback.customer = get_customer_deleted_none(data_dict.pop('customer_id', None), return_error=False, only_fields=['id'])
     feedback.platform = get_or_create_platform(data_dict.pop('platform', None))
 
     for attr, value in data_dict.items():
@@ -109,7 +109,7 @@ def add_feedback(request: HttpRequest, data: FeedbackIn) -> Union[tuple[int, Dic
 
 
 @router.get('{feedback_id}/', summary='Просмотр отзыва', response=FeedbackOut)
-def get_customer(request: HttpRequest, feedback_id: int) -> Feedback:
+def get_feedback(request: HttpRequest, feedback_id: int) -> Feedback:
     '''
     Метод получения данных о пользователе.
 
@@ -132,9 +132,9 @@ def get_customer(request: HttpRequest, feedback_id: int) -> Feedback:
 @router.delete(
     '{feedback_id}/',
     summary='Удаление отзыва о работе сайта',
-    response={200, 400}
+    response={200: None, 400: None}
 )
-def delete_feedback(request: HttpRequest, feedback_id: int) -> int:
+def delete_feedback(request: HttpRequest, feedback_id: int) -> tuple[int, None]:
     '''
     Метод удаления отзыва о работе сайта.
 
@@ -160,40 +160,5 @@ def delete_feedback(request: HttpRequest, feedback_id: int) -> int:
     number = Feedback.objects.filter(id=feedback_id).delete()
     if number:
         # Запись была удалена
-        return 200
-    return 400
-
-
-@router.delete(
-    '',
-    summary='Удаление отзыва о работе сайта',
-    response={200, 400}
-)
-def delete_bulk_feedback(
-        request: HttpRequest,
-        data: FeedbackDelete
-) -> int:
-    '''
-    Метод удаления пачки отзывов о работе сайта.
-
-    Аргументы:
-        request (HttpRequest): информация о запросе.
-
-    Тело запроса:
-        data (FavoriteDelete): данные об избранном из запроса (id избранных для удаления).
-
-    Возвращаемый результат:
-        (CustomerResponseOut): json ответа выполнения операции.
-
-    Примеры:
-        >>>> delete_feedback(HttpRequest(), {"id": [1, 2, 3]})
-        response: {
-          "success": true,
-          "message": null,
-          "data": {
-            "count_deleted": 2
-          }
-        }
-    '''
-    count_deleted, _ = data.filter(Feedback.objects.all()).delete()
-    return 200
+        return 200, None
+    return 400, None
