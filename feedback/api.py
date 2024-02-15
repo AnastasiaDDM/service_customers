@@ -7,17 +7,30 @@ from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from ninja import Query, Router
-from ninja.pagination import LimitOffsetPagination, paginate
+from ninja.pagination import paginate
+from ninja_extra.ordering import ordering, Ordering
 
 from .models import Feedback
-from .schemas import FeedbackOut, FeedbackIn, FeedbackFilter, FeedbackDelete
+from .schemas import FeedbackOut, FeedbackIn, FeedbackFilter, FeedbackDelete, PaginationFilter, OrderingFilter
 from vaptekecustomers.common import get_customer_deleted_none, get_or_create_platform
 
 router = Router()
 
 
+
+
+
+# def sorting_def(params_query: Dict[str, Any]):
+
+
+
+
+
+
+
 @router.get('', summary='Список отзывов о работе сайта', response=List[FeedbackOut])
-@paginate(LimitOffsetPagination)
+@paginate(PaginationFilter)
+# @ordering(OrderingFilter)
 def list_feedback(request: HttpRequest, filters: FeedbackFilter = Query(...)) -> List[FeedbackOut]:
     '''
     Метод получения списка отзывов о работе сайта.
@@ -58,7 +71,42 @@ def list_feedback(request: HttpRequest, filters: FeedbackFilter = Query(...)) ->
           "count": 2
         }
     '''
-    feedback = filters.filter(Feedback.objects.all())
+    # Отсекаем параметры для сортировки
+
+    f = filters.dict()
+    list_order = []
+    list_order.append(f.pop('sort'))
+    list_order.append(f.pop('sort_0'))
+    list_order.append(f.pop('sort_1'))
+    print(list_order)
+
+
+    sorting_fields = []
+    if list_order:
+        # Обработка строки сортировки
+        # Возможные варианты: sort=rating, sort=id:asc, sort[0]=url:asc, sort[1]=rating:desc
+        for field in list_order:
+            if field:
+                print(field)
+                list_field = field.split(':')
+                if len(list_field) == 2:
+                    if list_field[1] == 'desc':
+                        list_field[0] = '-' + list_field[0]
+                # field = list_field[0]
+                sorting_fields.append(list_field[0])
+
+        # return self.remove_invalid_fields(items, fields)
+    #     return fields
+    # return []
+    print(sorting_fields)
+    print(f)
+
+    filters = FeedbackFilter(**f)
+
+    # sort_args, filters = sorting_def(f)
+
+    print(filters)
+    feedback = filters.filter(Feedback.objects.all().select_related('platform')).order_by(*sorting_fields)
     return feedback
 
 
