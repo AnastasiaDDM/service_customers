@@ -85,75 +85,80 @@ def check_sum(values):
     return values
 
 
-class OrderingFilter(OrderingBase):
-    class Input(Schema):
-        sort: Optional[str] = Field(None, alias='sort')
-        sort_0: Optional[str] = Field(None, alias='sort[0]')
-        sort_1: Optional[str] = Field(None, alias='sort[1]')
-        # ordering = None
-
-        # root_validator('*', allow_reuse=True)(check_sum)
-
-    def __init__(
-        self,
-        ordering_fields: Optional[List[str]] = None,
-        pass_parameter: Optional[str] = None,
-    ) -> None:
-        super().__init__(pass_parameter=pass_parameter)
-        self.ordering_fields = ordering_fields or "__all__"
-
-    def ordering_queryset(
-        self, items: Union[QuerySet, List], ordering_input: Input
-    ) -> Union[QuerySet, List]:
-
-        raw_fields_sorting = [ordering_input.sort, ordering_input.sort_0, ordering_input.sort_1]
-        fields_sorting = self.get_ordering(items, raw_fields_sorting)
-        if fields_sorting:
-            if isinstance(items, QuerySet):  # type:ignore
-                return items.order_by(*fields_sorting)
-        return items
-
-    def get_ordering(
-        self, items: Union[QuerySet, List], fields: Optional[List[str]]
-    ) -> List[str]:
-        if fields:
-            # Обработка строки сортировки
-            # Возможные варианты: sort=rating, sort=id:asc, sort[0]=url:asc, sort[1]=rating:desc
-            for field in fields:
-                list_field = field.split(':')
-                if len(list_field) == 2:
-                    if list_field[1] == 'desc':
-                        list_field[0] = '-' + list_field[0]
-                field = list_field[0]
-
-            return self.remove_invalid_fields(items, fields)
-        return []
-
-    def remove_invalid_fields(
-        self, items: Union[QuerySet, List], fields: List[str]
-    ) -> List[str]:
-        valid_fields = list(self.get_valid_fields(items))
-
-        def term_valid(term: str) -> bool:
-            if term.startswith("-"):
-                term = term[1:]
-            return term in valid_fields
-
-        return [term for term in fields if term_valid(term)]
-
-    def get_valid_fields(self, items: Union[QuerySet, List]) -> List[str]:
-        valid_fields: List[str] = []
-        if self.ordering_fields == "__all__":
-            if isinstance(items, QuerySet):  # type:ignore
-                valid_fields = self.get_all_valid_fields_from_queryset(items)
-        else:
-            valid_fields = list(self.ordering_fields)
-        return valid_fields
-
+# class OrderingFilter(OrderingBase):
+#     pass
+    # class Input(Schema):
+    #     sort: Optional[str] = Field(None, alias='sort')
+    #     sort_0: Optional[str] = Field(None, alias='sort[0]')
+    #     sort_1: Optional[str] = Field(None, alias='sort[1]')
+    #     ordering = None
+    #
+    #     # root_validator('*', allow_reuse=True)(check_sum)
+    #
+    # def __init__(
+    #     self,
+    #     ordering_fields: Optional[List[str]] = None,
+    #     pass_parameter: Optional[str] = None,
+    # ) -> None:
+    #     super().__init__(pass_parameter=pass_parameter)
+    #     self.ordering_fields = ordering_fields or "__all__"
+    #
+    # def ordering_queryset(
+    #     self, items: Union[QuerySet, List], ordering_input: Input
+    # ) -> Union[QuerySet, List]:
+    #
+    #     raw_fields_sorting = [ordering_input.sort, ordering_input.sort_0, ordering_input.sort_1]
+    #     fields_sorting = self.get_ordering(items, raw_fields_sorting)
+    #     if fields_sorting:
+    #         if isinstance(items, QuerySet):  # type:ignore
+    #             return items.order_by(*fields_sorting)
+    #     return items
+    #
+    # def get_ordering(
+    #     self, items: Union[QuerySet, List], fields: Optional[List[str]]
+    # ) -> List[str]:
+    #     if fields:
+    #         new_fields = []
+    #         # Обработка строки сортировки
+    #         # Возможные варианты: sort=rating, sort=id:asc, sort[0]=url:asc, sort[1]=rating:desc
+    #         for field in fields:
+    #             list_field = field.split(':')
+    #             if len(list_field) == 2:
+    #                 if list_field[1] == 'desc':
+    #                     list_field[0] = '-' + list_field[0]
+    #             new_fields.append(list_field[0])
+    #             print(new_fields)
+    #
+    #         return self.remove_invalid_fields(items, new_fields)
+    #     return []
+    #
+    # def remove_invalid_fields(
+    #     self, items: Union[QuerySet, List], fields: List[str]
+    # ) -> List[str]:
+    #     valid_fields = list(self.get_valid_fields(items))
+    #
+    #     def term_valid(term: str) -> bool:
+    #         if term.startswith("-"):
+    #             term = term[1:]
+    #         return term in valid_fields
+    #
+    #     return [term for term in fields if term_valid(term)]
+    #
+    # def get_valid_fields(self, items: Union[QuerySet, List]) -> List[str]:
+    #     valid_fields: List[str] = []
+    #     if self.ordering_fields == "__all__":
+    #         if isinstance(items, QuerySet):  # type:ignore
+    #             valid_fields = self.get_all_valid_fields_from_queryset(items)
+    #     else:
+    #         valid_fields = list(self.ordering_fields)
+    #     return valid_fields
+    #
     def get_all_valid_fields_from_queryset(self, items: QuerySet) -> List[str]:
+        items.model._meta.fields
         return [str(field.name) for field in items.model._meta.fields] + [
             str(key) for key in items.query.annotations
         ]
+
 
 
 class FeedbackFilter(FilterSchema):

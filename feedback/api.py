@@ -11,7 +11,7 @@ from ninja.pagination import paginate
 from ninja_extra.ordering import ordering, Ordering
 
 from .models import Feedback
-from .schemas import FeedbackOut, FeedbackIn, FeedbackFilter, FeedbackDelete, PaginationFilter, OrderingFilter
+from .schemas import FeedbackOut, FeedbackIn, FeedbackFilter, FeedbackDelete, PaginationFilter #OrderingFilter
 from vaptekecustomers.common import get_customer_deleted_none, get_or_create_platform
 
 router = Router()
@@ -95,6 +95,12 @@ def list_feedback(request: HttpRequest, filters: FeedbackFilter = Query(...)) ->
                 # field = list_field[0]
                 sorting_fields.append(list_field[0])
 
+    # valid_fields = [str(field.name) for field in Feedback.__dict__.keys()]
+    # print(valid_fields)
+    print(Feedback.__dict__.keys())
+    print(list(vars(Feedback).keys()))
+
+
         # return self.remove_invalid_fields(items, fields)
     #     return fields
     # return []
@@ -106,6 +112,7 @@ def list_feedback(request: HttpRequest, filters: FeedbackFilter = Query(...)) ->
     # sort_args, filters = sorting_def(f)
 
     print(filters)
+    # feedback = filters.filter(Feedback.objects.all().select_related('platform')).order_by(*sorting_fields)
     feedback = filters.filter(Feedback.objects.all().select_related('platform')).order_by(*sorting_fields)
     return feedback
 
