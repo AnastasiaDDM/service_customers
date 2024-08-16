@@ -23,10 +23,10 @@ RUN apk add gcc libc-dev g++ libffi-dev libxml2 unixodbc-dev postgresql-dev
 WORKDIR /app/
 COPY requirements.txt .
 
-RUN pip install --trusted-host pip.aptekar.local -i http://pip.aptekar.local -r requirements.txt && pip cache purge && rm requirements.txt
+RUN pip install -r requirements.txt && pip cache purge && rm requirements.txt
 
 COPY ./ ./
 ENTRYPOINT ["python", "-m"]
-CMD ["vaptekecustomers"]
+CMD ["servicecustomers"]
 
 

@@ -19,7 +19,7 @@ async def main():
 
     # Запуск сервера API
     api_server = await asyncio.create_subprocess_exec(
-        'python', '-m', 'gunicorn', 'vaptekecustomers.asgi:application',
+        'python', '-m', 'gunicorn', 'servicecustomers.asgi:application',
         '-b', '0.0.0.0:8000', '-w', str(API_WORKERS),
         '-k', 'uvicorn.workers.UvicornWorker'
     )

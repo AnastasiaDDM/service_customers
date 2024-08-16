@@ -56,7 +56,8 @@ class Customers(models.Model):
 
     id = models.IntegerField('id', primary_key=True)
     email = models.EmailField(max_length=254, null=True, blank=True)
-    phone = models.OneToOneField(Phones, on_delete=models.PROTECT, unique=True)
+    # Удаляем номер - каскадно удаляется и клиент
+    phone = models.OneToOneField(Phones, on_delete=models.CASCADE, unique=True)
     firstname = models.ForeignKey(
         Firstnames,
         max_length=50,
@@ -76,8 +77,8 @@ class Customers(models.Model):
     GENDER_CHOICES = (('M', 'Male'), ('F', 'Female'))
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, null=True, blank=True)
     city_id = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(null=True, blank=True)
     last_auth_at = models.DateTimeField(null=True, blank=True)
-    deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'customers'

@@ -9,7 +9,7 @@ class FavoriteOut(Schema):
     '''Схема OUT для избранных.'''
 
     id: int
-    user_id: int
+    customer_id: int
     item_id: int
     created_at: Optional[datetime.datetime] = None
 
@@ -17,7 +17,7 @@ class FavoriteOut(Schema):
 class FavoriteIn(Schema):
     '''Схема IN для избранных.'''
 
-    user_id: int
+    customer_id: int
     item_id: int
 
 
@@ -25,7 +25,7 @@ class FavoriteFilter(FilterSchema):
     '''Схема FILTER для избранных.'''
 
     id: Optional[int] = None
-    user_id__in: List[int] = Field(None, alias='user_id')
+    customer_id__in: List[int] = Field(None, alias='customer_id')
     item_id__in: List[int] = Field(None, alias='item_id')
     created_at: Optional[datetime.datetime] = None
 

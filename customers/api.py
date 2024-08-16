@@ -4,21 +4,24 @@ from typing import Any, Dict, List, Union
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from ninja import Router
+from ninja import Query, Router
 from ninja.pagination import LimitOffsetPagination, paginate
 
 from .models import Customers, Firstnames, Lastnames, Phones
-from .schemas import CustomerIn, CustomerOut, CustomerResponseOut, CustomerUpdate, PhoneStrIn
+from .schemas import (
+    CustomerFilter, CustomerIn, CustomerOut, CustomerOutExtended, CustomerResponseOut,
+    CustomerUpdate, PhoneStrIn
+)
 
 router = Router()
 
 
 def _filling_names(data_dict: Dict[str, Any]) -> None:
     '''
-    Внутренний метод заполнения ФИО клиента (firstname, lastname).
+    Внутренний метод заполнения ФИО пользователя (firstname, lastname).
 
     Аргументы:
-        data_dict (Dict): данные о клиенте из запроса.
+        data_dict (Dict): данные о пользователе из запроса.
 
     Возвращаемый результат:
         None
@@ -34,38 +37,51 @@ def _filling_names(data_dict: Dict[str, Any]) -> None:
         data_dict['lastname'] = lastname
 
 
-@router.get('', summary='Список клиентов', response=List[CustomerOut])
+@router.get('', summary='Список пользователей', response=List[CustomerOutExtended])
 @paginate(LimitOffsetPagination)
-def list_customers(request: HttpRequest) -> List[Customers]:
+def list_customers(request: HttpRequest, filters: CustomerFilter = Query(...)) -> List[Customers]:
     '''
-    Метод получения списка клиентов.
+    Метод получения списка пользователей.
 
     Аргументы:
         request (HttpRequest): информация о запросе.
+        filters (Query): фильтры запроса из параметров.
 
     Параметры:
         limit (int): количество элементов в одном ответе.
         offset (int): смещение (страница).
 
     Возвращаемый результат:
-        (list[dict]): список json данных о клиентах.
+        (list[dict]): список json данных о пользователях.
 
     Примеры:
         >>>> list_customers(HttpRequest())
-        [{"id": 14722, "phone": {"id": 1, "code": "7", "number": "9025163138"},
-        "firstname": "Виктор", "lastname": null, "email": "ving@mail.ru", "birthday": null}, ...]
+        {
+          "items": [
+            {
+              "id": 1,
+              "phone": {
+                "id": 1,
+                "code": "7",
+                "number": "9046573823"
+              },
+              "firstname": "Иван",
+              ...
+            }, ...
+          ],
+          "count": 2
+        }
     '''
-    customers = Customers.objects.filter(deleted_at=None).select_related(
-        'phone',
-        'firstname',
-        'lastname'
+    customers = filters.filter(
+        Customers.objects.all().select_related('phone', 'firstname', 'lastname')
     )
+
     return customers
 
 
 @router.post(
     '',
-    summary='Создание клиента',
+    summary='Создание пользователя',
     response={200: CustomerOut, 400: CustomerResponseOut}
 )
 def create_customer(
@@ -73,16 +89,16 @@ def create_customer(
         data: CustomerIn
 ) -> Union[tuple[int, Dict[str, Any]], tuple[int, Customers]]:
     '''
-    Метод создания клиента.
+    Метод создания пользователя.
 
     Аргументы:
         request (HttpRequest): информация о запросе.
 
     Тело запроса:
-        data (CustomerIn): данные о клиенте из запроса.
+        data (CustomerIn): данные о пользователе из запроса.
 
     Возвращаемый результат:
-        (CustomerOut): json данных о клиенте.
+        (CustomerOut): json данных о пользователе.
 
     Примеры:
         >>>> create_customer(HttpRequest(), data)
@@ -130,6 +146,7 @@ def create_customer(
     # Устанавливаем значения атрибутам
     data_dict['id'] = max_id.get('id', 0) + 1
     data_dict['phone'] = phone
+    data_dict['created_at'] = timezone.now()
 
     # Создание instance Customers
     customer = Customers()
@@ -142,17 +159,17 @@ def create_customer(
     return 200, customer
 
 
-@router.get('{customer_id}/', summary='Просмотр клиента', response=CustomerOut)
+@router.get('{customer_id}/', summary='Просмотр пользователя', response=CustomerOut)
 def get_customer(request: HttpRequest, customer_id: int) -> Customers:
     '''
-    Метод получения данных о неудаленном клиенте.
+    Метод получения данных о пользователе.
 
     Аргументы:
         request (HttpRequest): информация о запросе.
-        customer_id (int): id клиента.
+        customer_id (int): id пользователя.
 
     Возвращаемый результат:
-        (dict): json данных о клиенте.
+        (dict): json данных о пользователе.
 
     Примеры:
         >>>> get_customer(HttpRequest(), 14722)
@@ -161,24 +178,23 @@ def get_customer(request: HttpRequest, customer_id: int) -> Customers:
     '''
     customer = get_object_or_404(
         Customers.objects.select_related('phone', 'firstname', 'lastname'),
-        id=customer_id,
-        deleted_at=None
+        id=customer_id
     )
     return customer
 
 
 @router.delete(
     '{customer_id}/',
-    summary='Мягкое удаление клиента',
+    summary='Удаление пользователя',
     response=CustomerResponseOut
 )
 def delete_customer(request: HttpRequest, customer_id: int) -> Dict[str, str | bool | None]:
     '''
-    Метод мягкого удаления клиента.
+    Метод безвозвратного удаления пользователя.
 
     Аргументы:
         request (HttpRequest): информация о запросе.
-        customer_id (int): id клиента.
+        customer_id (int): id пользователя.
 
     Возвращаемый результат:
         (CustomerResponseOut): json ответа выполнения операции.
@@ -188,26 +204,25 @@ def delete_customer(request: HttpRequest, customer_id: int) -> Dict[str, str | b
         {'success': True, 'message': None}
     '''
     customer = get_object_or_404(Customers, id=customer_id)
-    if not customer.deleted_at:
-        customer.deleted_at = timezone.now()
-        customer.save(update_fields=['deleted_at'])
+    # При удалении телефона, каскадно удаляются пользователь и его избранные товары
+    customer.phone.delete()
     return {'success': True, 'message': None}
 
 
-@router.patch('{customer_id}/', summary='Изменение клиента', response=CustomerOut)
+@router.patch('{customer_id}/', summary='Изменение пользователя', response=CustomerOut)
 def update_customer(request: HttpRequest, customer_id: int, data: CustomerUpdate) -> Customers:
     '''
-    Метод изменения клиента.
+    Метод изменения пользователя.
 
     Аргументы:
         request (HttpRequest): информация о запросе.
-        customer_id (int): id клиента.
+        customer_id (int): id пользователя.
 
     Тело запроса:
-        data (CustomerUpdate): данные о клиенте из запроса.
+        data (CustomerUpdate): данные о пользователе из запроса.
 
     Возвращаемый результат:
-        (CustomerOut): json данных о клиенте.
+        (CustomerOut): json данных о пользователе.
 
     Примеры:
         >>>> update_customer(HttpRequest(), 446200, data)
@@ -244,7 +259,7 @@ def update_customer(request: HttpRequest, customer_id: int, data: CustomerUpdate
 
 @router.patch(
     '{customer_id}/phone',
-    summary='Изменение телефона клиента',
+    summary='Изменение телефона пользователя',
     response=CustomerResponseOut
 )
 def update_phone(
@@ -253,14 +268,14 @@ def update_phone(
         data: PhoneStrIn
 ) -> Dict[str, bool | str]:
     '''
-    Метод изменения телефона клиента.
+    Метод изменения телефона пользователя.
 
     Аргументы:
         request (HttpRequest): информация о запросе.
-        customer_id (int): id клиента.
+        customer_id (int): id пользователя.
 
     Тело запроса:
-        data (PhoneStrIn): данные о клиенте из запроса (телефон).
+        data (PhoneStrIn): данные о пользователе из запроса (телефон).
 
     Возвращаемый результат:
         (CustomerResponseOut): json ответа выполнения операции.
@@ -273,8 +288,7 @@ def update_phone(
     # Поиск клиента
     customer = get_object_or_404(
         Customers.objects.select_related('phone'),
-        id=customer_id,
-        deleted_at=None
+        id=customer_id
     )
 
     # Проверить не используется ли новый номер

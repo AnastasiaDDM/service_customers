@@ -1,4 +1,4 @@
-'''Настройки для проекта vAptekeCustomers.'''
+'''Настройки для проекта serviceCustomers.'''
 import os
 from pathlib import Path
 
@@ -26,10 +26,10 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'vaptekecustomers.urls'
+ROOT_URLCONF = 'servicecustomers.urls'
 
 
-WSGI_APPLICATION = 'vaptekecustomers.wsgi.application'
+WSGI_APPLICATION = 'servicecustomers.wsgi.application'
 
 DATABASES = {
     'default': {
@@ -41,13 +41,13 @@ DATABASES = {
         'PASSWORD': os.environ['POSTGRES_PASSWORD']
 
     },
-    'vAptekeSync': {
+    'mssql_db': {
         'ENGINE': 'mssql',
-        'HOST': os.environ['VAPTEKESYNC_HOST'],
-        'PORT': os.environ['VAPTEKESYNC_PORT'],
-        'NAME': os.environ['VAPTEKESYNC_DB'],
-        'USER': os.environ['VAPTEKESYNC_USER'],
-        'PASSWORD': os.environ['VAPTEKESYNC_PASSWORD'],
+        'HOST': os.environ['MSSQL_HOST'],
+        'PORT': os.environ['MSSQL_PORT'],
+        'NAME': os.environ['MSSQL_DB'],
+        'USER': os.environ['MSSQL_USER'],
+        'PASSWORD': os.environ['MSSQL_PASSWORD'],
         'TIME_ZONE': 'Asia/Irkutsk',
         'OPTIONS': {
             'connection_timeout': int(os.environ['MSSQL_TIMEOUT']),
@@ -87,3 +87,28 @@ USE_I18N = True
 USE_TZ = True
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+LOGGING = {
+
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "WARNING",
+    },
+
+    # Для тестирования (логирование запросов в бд)
+    "loggers": {
+        'django.db.backends': {
+                'level': 'DEBUG',
+                'handlers': ['console'],
+                'propagate': False,
+            },
+    }
+}

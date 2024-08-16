@@ -1,4 +1,4 @@
-'''Модуль для методов API по работе с сущностью Клиента.'''
+'''Модуль для методов API по работе с сущностью Избранных товаров.'''
 from typing import Dict, List
 
 from customers.models import Customers
@@ -30,8 +30,8 @@ def list_favorites(request: HttpRequest, filters: FavoriteFilter = Query(...)) -
         limit (int): количество элементов в одном ответе.
         offset (int): смещение (страница).
         id (int): id записи.
-        user_id (list[int]): список id клиентов (в строке запроса записывается так:
-                user_id=14738&user_id=14722)
+        customer_id (list[int]): список id пользователей (в строке запроса записывается так:
+                customer_id=14738&customer_id=14722)
         item_id (list[int]): список id товаров (в строке запроса записывается так:
                 item_id=10&item_id=12)
         created_at (datetime): дата создания (добавления в избранные).
@@ -44,13 +44,13 @@ def list_favorites(request: HttpRequest, filters: FavoriteFilter = Query(...)) -
           "items": [
             {
               "id": 1,
-              "user_id": 14722,
+              "customer_id": 14722,
               "item_id": 12,
               "created_at": null
             },
             {
               "id": 2,
-              "user_id": 14738,
+              "customer_id": 14738,
               "item_id": 34,
               "created_at": null
             }
@@ -79,12 +79,12 @@ def add_favorite(request: HttpRequest, data: FavoriteIn) -> FavoriteOut:
     Примеры:
         >>>> add_favorite(HttpRequest(), data)
         data: {
-          "user_id": 147224,
+          "customer_id": 147224,
           "item_id": 10
         }
         response: {
           "id": 10,
-          "user_id": 14722,
+          "customer_id": 14722,
           "item_id": 120,
           "created_at": "2024-01-09T08:38:32.923Z"
         }
@@ -92,11 +92,11 @@ def add_favorite(request: HttpRequest, data: FavoriteIn) -> FavoriteOut:
     data_dict = data.dict()
 
     # Получаем клиента
-    customer = get_object_or_404(Customers, pk=data_dict['user_id'])
+    customer = get_object_or_404(Customers, pk=data_dict['customer_id'])
 
     # Добавляем или получаем из базы избранное
     favorite, _ = Favorites.objects.get_or_create(
-        user=customer,
+        customer=customer,
         item_id=data_dict['item_id'],
     )
     favorite.created_at = timezone.now()

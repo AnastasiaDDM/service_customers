@@ -1,10 +1,10 @@
 '''Модуль для описания схем представления данных клиентов.'''
 import datetime
 import re
-# import typing
-from typing import Dict, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
-from ninja import Field, ModelSchema, Schema
+from django.db.models import Q
+from ninja import Field, FilterSchema, ModelSchema, Schema
 from pydantic import EmailStr, validator
 
 from .models import Phones
@@ -41,7 +41,7 @@ class PhoneOut(ModelSchema):
 
 
 class CustomerOut(Schema):
-    '''Схема OUT для клиента.'''
+    '''Схема OUT для пользователя.'''
 
     id: int
     phone: PhoneOut
@@ -49,6 +49,15 @@ class CustomerOut(Schema):
     lastname: str | None = Field(None, max_length=name_max_length, alias='lastname.name')
     email: str | None = Field(None, max_length=254)  # Для пропуска email с точкой и др.
     birthday: datetime.date | None
+
+
+class CustomerOutExtended(CustomerOut):
+    '''Схема OUT расширенная для пользователя. Наследует поля из CustomerOut.'''
+
+    gender: Optional[Literal['M', 'F']] | None
+    city_id: int | None
+    created_at: datetime.datetime | None
+    last_auth_at: datetime.datetime | None
 
 
 class PhoneStrIn(Schema):
@@ -60,7 +69,7 @@ class PhoneStrIn(Schema):
 
 
 class CustomerUpdate(Schema):
-    '''Схема IN Update для клиента.'''
+    '''Схема IN Update для пользователя.'''
 
     firstname: str = Field(None, max_length=name_max_length)
     lastname: str = Field(None, max_length=name_max_length)
@@ -75,13 +84,55 @@ class CustomerUpdate(Schema):
 
 
 class CustomerIn(PhoneStrIn, CustomerUpdate):
-    '''Схема IN для клиента. Наследует поля и валидаторы из PhoneStrIn и CustomerUpdate.'''
+    '''Схема IN для пользователя. Наследует поля и валидаторы из PhoneStrIn и CustomerUpdate.'''
 
     pass
 
 
+class CustomerFilter(FilterSchema):
+    '''Схема FILTER для пользователей.'''
+
+    id__in: List[int] = Field(None, alias='id')
+    gender: Literal['M', 'F'] = Field(None, alias='gender')
+    city_id__in: List[int] = Field(None, alias='city_id')
+    phone: str = Field(None, q='phone__number__icontains')
+    firstname: str = Field(None, q='firstname__name__icontains')
+    lastname: str = Field(None, q='lastname__name__icontains')
+    email: str = Field(None, q='email__icontains')
+    birthday_min: Optional[datetime.date] = None
+    birthday_max: Optional[datetime.date] = None
+    created_at_min: Optional[datetime.date] = None
+    created_at_max: Optional[datetime.date] = None
+    last_auth_at_min: Optional[datetime.date] = None
+    last_auth_at_max: Optional[datetime.date] = None
+
+    def filter_birthday_min(self, value: datetime.date) -> Q:
+        '''Условие фильтра для поиска.'''
+        return Q(birthday__gte=value)
+
+    def filter_birthday_max(self, value: datetime.date) -> Q:
+        '''Условие фильтра для поиска.'''
+        return Q(birthday__lte=value)
+
+    def filter_created_at_min(self, value: datetime.date) -> Q:
+        '''Условие фильтра для поиска.'''
+        return Q(created_at__gte=value)
+
+    def filter_created_at_max(self, value: datetime.date) -> Q:
+        '''Условие фильтра для поиска.'''
+        return Q(created_at__lte=value)
+
+    def filter_last_auth_at_min(self, value: datetime.date) -> Q:
+        '''Условие фильтра для поиска.'''
+        return Q(last_auth_at__gte=value)
+
+    def filter_last_auth_at_max(self, value: datetime.date) -> Q:
+        '''Условие фильтра для поиска.'''
+        return Q(last_auth_at__lte=value)
+
+
 class CustomerResponseOut(Schema):
-    '''Схема OUT для общих ответов клиента.'''
+    '''Схема OUT для общих ответов пользователя.'''
 
     success: bool
     message: str | None

@@ -4,9 +4,8 @@ import re
 from customers.models import Customers, Firstnames, Phones
 from django.db import connections
 from django.http import HttpRequest, HttpResponse
-import logs
 from ninja import Router
-from vaptekecustomers import utils
+from servicecustomers import utils
 
 router = Router()
 
@@ -14,7 +13,7 @@ router = Router()
 @router.get('import_customers/', summary='Запуск импорта зарегистрированных пользователей')
 def import_customers(request: HttpRequest) -> HttpResponse:
     '''
-    Метод импорта данных о зарегистрированных клиентах из MSSQL vAptekeSync.
+    Метод импорта данных зарегистрированных пользователей из MSSQL БД.
 
     Аргументы:
         request (HttpRequest): информация о запросе.
@@ -26,21 +25,20 @@ def import_customers(request: HttpRequest) -> HttpResponse:
         >>>> import_customers(HttpRequest())
         ('Импорт выполнен')
     '''
-    logs.info('Client import starting.')
-
     customers = []
     pattern_email = r'^.{1,100}@[a-z]{2,6}\.[a-z]{2,4}$'
 
     try:
-        # Запрос к vAptekeSync
-        with connections['vAptekeSync'].cursor() as cursor:
+        # Запрос к MSSQL
+        with connections['mssql_db'].cursor() as cursor:
             cursor.execute("""
                 SELECT
                     ID,
                     right(phone_main, 10) as phone_main,
                     FirstFIO,
                     email_main,
-                    created_at
+                    created_at,
+                    DATEADD(s, created_at, '1970-01-01') as created_at_format_datetime
                 FROM ZkzClients c WITH (NOLOCK)
                 WHERE c.ID IN
                     (SELECT max(a.ID)
@@ -90,7 +88,8 @@ def import_customers(request: HttpRequest) -> HttpResponse:
                         id=int(row['ID']),
                         phone=phone,
                         firstname=fio,
-                        email=email
+                        email=email,
+                        created_at=row.get('created_at_format_datetime')
                     )
                 )
 
@@ -98,12 +97,13 @@ def import_customers(request: HttpRequest) -> HttpResponse:
                 # Добавляем клиентов в бд
                 Customers.objects.bulk_create(customers, ignore_conflicts=True)
             except Exception:
-                logs.exception_caught('Error adding clients to Postgres.')
-                return HttpResponse('Импорт не выполнен. Ошибка добавления клиентов в Postgres.')
+                return HttpResponse(
+                    'Импорт не выполнен. Ошибка добавления пользователей в Postgres.'
+                )
 
     except Exception:
-        logs.exception_caught('Error importing from MSSQL vAptekeSync.')
-        return HttpResponse('Импорт не выполнен. Ошибка импорта из MSSQL vAptekeSync.')
+        return HttpResponse(
+            'Импорт не выполнен. Ошибка импорта пользователей из бд MSSQL.'
+        )
 
-    logs.info('Client import completed.')
     return HttpResponse('Импорт выполнен.')
