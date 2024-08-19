@@ -104,11 +104,11 @@ LOGGING = {
     },
 
     # Для тестирования (логирование запросов в бд)
-    "loggers": {
-        'django.db.backends': {
-                'level': 'DEBUG',
-                'handlers': ['console'],
-                'propagate': False,
-            },
-    }
+    # "loggers": {
+    #     'django.db.backends': {
+    #             'level': 'DEBUG',
+    #             'handlers': ['console'],
+    #             'propagate': False,
+    #         },
+    # }
 }
